@@ -1,0 +1,4 @@
+youtube-transcript-api
+youtube-comment-downloader
+yt-dlp
+google-genai
