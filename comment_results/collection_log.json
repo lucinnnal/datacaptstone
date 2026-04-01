@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-04-01T14:02:04.934175",
+  "channels_file": "/Users/kipyokim/Desktop/datacaptstone/channels.jsonl",
+  "channels_count": 20,
+  "videos_per_channel": 5,
+  "total_videos": 100,
+  "successful": 97,
+  "failed": 3
+}
