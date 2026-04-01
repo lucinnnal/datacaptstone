@@ -1,21 +1,14 @@
 {
-  "timestamp": "2026-03-23T15:56:12.509794",
-  "input_file": "urls.jsonl",
-  "total": 2,
-  "successful": 0,
-  "failed": 2,
+  "timestamp": "2026-03-26T21:29:35.700923",
+  "input_file": "/Users/kipyokim/Desktop/datacaptstone/urls.jsonl",
+  "total": 1,
+  "successful": 1,
+  "failed": 0,
   "results": [
     {
-      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "url": "https://www.youtube.com/watch?v=rA5Mt_XdoSQ",
       "line": 1,
-      "success": false,
-      "error": "Object of type FetchedTranscript is not JSON serializable"
-    },
-    {
-      "url": "https://www.youtube.com/watch?v=9bZkp7q19f0",
-      "line": 2,
-      "success": false,
-      "error": "Object of type FetchedTranscript is not JSON serializable"
+      "success": true
     }
   ]
 }

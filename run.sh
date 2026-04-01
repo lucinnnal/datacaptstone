@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# YouTube Data Collector - Batch Processing Script
-# Usage: ./run.sh <urls.jsonl> [output_directory]
+# YouTube Channel Data Collector - Main Pipeline Script
+# Usage: ./run.sh <channels.jsonl> [output_directory] [videos_per_channel]
 
 set -e
 
@@ -14,26 +14,51 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}YouTube Data Collector - Batch Mode${NC}"
+echo -e "${GREEN}YouTube Channel Data Collector${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
 # Check arguments
 if [ $# -lt 1 ]; then
     echo -e "${RED}Error: Missing required argument${NC}"
-    echo "Usage: $0 <urls.jsonl> [output_directory]"
+    echo "Usage: $0 <channels.jsonl> [output_directory] [videos_per_channel]"
+    echo ""
+    echo "  channels.jsonl       JSONL file with channel URLs"
+    echo "  output_directory     Output directory (default: output_dir)"
+    echo "  videos_per_channel   Number of videos per channel (default: 10)"
     exit 1
 fi
 
-URLS_FILE="$1"
-OUTPUT_DIR="${2:-output}"
+CHANNELS_FILE="$1"
+OUTPUT_DIR="${2:-output_dir}"
+VIDEOS_PER_CHANNEL="${3:-10}"
 
-# Diagnose Python
+# Initialize conda
+eval "$(conda shell.bash hook)"
+
+# Activate datacapstone environment
+conda activate datacapstone
+
 echo -e "${YELLOW}Using Python from: $(which python)${NC}"
+echo ""
 
-# Run batch collector using 'python' instead of 'python3'
+# Run channel collector
 cd "$SCRIPT_DIR"
-python batch_collector.py "$URLS_FILE" "$OUTPUT_DIR" --max-comments 1000 --sort-by 0
+python channel_collector.py "$CHANNELS_FILE" \
+    --output-dir "$OUTPUT_DIR" \
+    --videos-per-channel "$VIDEOS_PER_CHANNEL" \
+    --max-comments 50 \
+    --sort-by 0
 
 EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}Data collection complete!${NC}"
+    echo -e "Output directory: ${YELLOW}${OUTPUT_DIR}/${NC}"
+    echo ""
+    echo "Next step: Run Gemini summary generation:"
+    echo -e "  ${YELLOW}./run_gemini.sh ${OUTPUT_DIR}/combined_data.jsonl${NC}"
+fi
+
 exit $EXIT_CODE

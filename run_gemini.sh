@@ -13,6 +13,11 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}Gemini Summary Generator${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo ""
+
 if [ -z "$GEMINI_API_KEY" ]; then
     echo -e "${RED}Error: GEMINI_API_KEY environment variable is not set.${NC}"
     echo "Please set it: export GEMINI_API_KEY='your_api_key'"
@@ -26,13 +31,27 @@ if [ $# -lt 1 ]; then
 fi
 
 INPUT_FILE="$1"
-OUTPUT_FILE="${2:-gemini_results_for_training.jsonl}"
+OUTPUT_FILE="${2:-output_dir/gemini_results_for_training.jsonl}"
 
-# Diagnose Python
+# Initialize conda
+eval "$(conda shell.bash hook)"
+
+# Activate datacapstone environment
+conda activate datacapstone
+
 echo -e "${YELLOW}Using Python from: $(which python)${NC}"
+echo ""
 
 echo -e "${GREEN}Starting Gemini Summary Generation...${NC}"
-python "$SCRIPT_DIR/summarize_with_gemini.py" "$INPUT_FILE" --output "$OUTPUT_FILE"
+cd "$SCRIPT_DIR"
+python summarize_with_gemini.py "$INPUT_FILE" --output "$OUTPUT_FILE"
 
 EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}Summary generation complete!${NC}"
+    echo -e "Output: ${YELLOW}${OUTPUT_FILE}${NC}"
+fi
+
 exit $EXIT_CODE

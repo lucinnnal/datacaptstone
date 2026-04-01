@@ -12,10 +12,35 @@ import argparse
 def parse_timestamp(text):
     """
     Parse timestamp patterns from comment text.
-    Supports formats like: 1:23, 12:34, 1:23:45, 0:00, etc.
+    Supports formats like: 
+    - 1:23, 12:34, 1:23:45 (MM:SS or H:MM:SS)
+    - 1분 23초, 2분 (Korean format)
+    - [1:23], (1:23) (bracketed/parenthesized)
     """
-    timestamp_pattern = r'\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b'
-    matches = re.findall(timestamp_pattern, text)
+    # Standard format: H:MM:SS or M:SS
+    standard_pattern = r'(\d{1,2}):(\d{2})(?::(\d{2}))?'
+    # Korean format: 분(minutes), 초(seconds)
+    korean_pattern = r'(\d+)분\s*(?:(\d+)초)?|(\d+)초'
+    # Bracketed or parenthesized
+    bracketed_pattern = r'[\[\(](\d{1,2}):(\d{2})(?::(\d{2}))?\][\]\)]'
+    
+    matches = []
+    
+    # Try standard format with word boundaries
+    m = re.findall(r'\b' + standard_pattern + r'\b', text)
+    if m:
+        matches.extend(m)
+    
+    # Try bracketed format (no word boundary needed)
+    m = re.findall(bracketed_pattern, text)
+    if m:
+        matches.extend(m)
+    
+    # Try Korean format
+    m = re.findall(korean_pattern, text)
+    if m:
+        matches.extend(m)
+    
     return matches if matches else None
 
 def get_video_length(video_url):
@@ -35,6 +60,24 @@ def get_transcript(video_id):
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         
+        def convert_to_json_serializable(item):
+            """Convert FetchedTranscriptSnippet or similar objects to dicts."""
+            if isinstance(item, dict):
+                return item
+            if hasattr(item, '_asdict'):  # namedtuple-like objects
+                return item._asdict()
+            if hasattr(item, '__dict__'):  # Regular objects with __dict__
+                return vars(item)
+            # Try to extract common transcript fields manually
+            try:
+                return {
+                    'text': getattr(item, 'text', str(item)),
+                    'start': getattr(item, 'start', 0),
+                    'duration': getattr(item, 'duration', 0)
+                }
+            except:
+                return str(item)
+        
         # Instantiate the API object (required in some versions)
         api = YouTubeTranscriptApi()
         
@@ -42,17 +85,22 @@ def get_transcript(video_id):
             # Using instance methods
             transcript_list = api.list(video_id)
             transcript = transcript_list.find_transcript(['ko', 'en'])
-            return transcript.fetch()
+            result = transcript.fetch()
+            return [convert_to_json_serializable(item) for item in result]
         except Exception:
             # Fallback for static method call if instance fails
             try:
                 transcript_list = YouTubeTranscriptApi.list(video_id)
                 transcript = transcript_list.find_transcript(['ko', 'en'])
-                return transcript.fetch()
+                result = transcript.fetch()
+                return [convert_to_json_serializable(item) for item in result]
             except Exception as e:
                 # Last resort: common static call
                 if hasattr(YouTubeTranscriptApi, 'get_transcript'):
-                    return YouTubeTranscriptApi.get_transcript(video_id, languages=['ko', 'en'])
+                    result = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko', 'en'])
+                    if result:
+                        return [convert_to_json_serializable(item) for item in result]
+                    return None
                 else:
                     raise e
                     
@@ -60,7 +108,7 @@ def get_transcript(video_id):
         print(f"Error getting transcript: {e}")
         return None
 
-def get_comments(video_url, sort_by=0, max_regular=1000, max_timestamp=100):
+def get_comments(video_url, sort_by=0, max_regular=50, max_timestamp=50):
     """
     Get comments from YouTube video.
     sort_by: 0 (Popular - 인기순), 1 (Recent - 최신순)
@@ -76,6 +124,8 @@ def get_comments(video_url, sort_by=0, max_regular=1000, max_timestamp=100):
         
         max_scans_limit = 50000
         scanned_count = 0
+        skipped_not_meaningful = 0
+        skipped_no_timestamp = 0
         
         for comment in generator:
             scanned_count += 1
@@ -83,22 +133,34 @@ def get_comments(video_url, sort_by=0, max_regular=1000, max_timestamp=100):
                 break
                 
             comment_text = comment.get('text', '')
+            timestamps = parse_timestamp(comment_text)
             
-            if is_meaningful_comment(comment_text):
-                timestamps = parse_timestamp(comment_text)
-                
-                if timestamps:
-                    if len(timestamp_comments) < max_timestamp:
+            # For timestamp comments, be more lenient with the meaningful comment check
+            if timestamps:
+                # Accept timestamp comments even if they're short
+                if len(timestamp_comments) < max_timestamp:
+                    # Just check that it's not empty
+                    if comment_text.strip():
                         timestamp_comments.append({
                             **comment,
                             'timestamps_found': timestamps
                         })
-                else:
-                    if len(regular_comments) < max_regular:
-                        regular_comments.append(comment)
+            elif is_meaningful_comment(comment_text):
+                if len(regular_comments) < max_regular:
+                    regular_comments.append(comment)
+            else:
+                skipped_not_meaningful += 1
                         
             if len(timestamp_comments) >= max_timestamp and len(regular_comments) >= max_regular:
                 break
+        
+        # Debug info
+        if scanned_count > 0:
+            print(f"  - Scanned: {scanned_count} comments")
+            print(f"  - Timestamp comments: {len(timestamp_comments)}")
+            print(f"  - Regular comments: {len(regular_comments)}")
+            if skipped_not_meaningful > 0:
+                print(f"  - Skipped (not meaningful): {skipped_not_meaningful}")
                 
         return timestamp_comments, regular_comments, scanned_count
     except Exception as e:
@@ -133,7 +195,7 @@ def extract_video_id(url):
             return match.group(1)
     return None
 
-def collect_video_data(video_url, max_regular=1000, max_timestamp=200, sort_by=0):
+def collect_video_data(video_url, max_regular=50, max_timestamp=50, sort_by=0):
     """Collects all required data for a single video."""
     video_id = extract_video_id(video_url)
     if not video_id:
@@ -167,8 +229,8 @@ def collect_video_data(video_url, max_regular=1000, max_timestamp=200, sort_by=0
 def main():
     parser = argparse.ArgumentParser(description="YouTube Data Collector")
     parser.add_argument("url", help="YouTube video URL")
-    parser.add_argument("--max-comments", "-m", type=int, default=1000, 
-                        help="Maximum number of comments to collect (default: 1000)")
+    parser.add_argument("--max-comments", "-m", type=int, default=50,
+                        help="Maximum number of comments to collect (default: 50)")
     parser.add_argument("--sort-by", "-s", type=int, choices=[0, 1], default=0,
                         help="Sort comments by: 0 for Popular, 1 for Recent (default: 0)")
     parser.add_argument("--output", "-o", default="output.jsonl", help="Output JSONL file")
