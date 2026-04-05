@@ -1,12 +1,20 @@
 # YouTube Data Capstone Project
 
-YouTube 채널 리스트를 입력받아 각 채널의 최신 영상에서 **transcript(자막)**, **timestamp 댓글**, **일반 댓글**을 자동 수집하고, Gemini 2.5를 활용하여 sLLM 학습용 요약 데이터를 생성하는 파이프라인입니다.
+YouTube 채널 리스트를 입력받아 각 채널의 최신 영상에서 **transcript(자막)**, **timestamp 댓글**, **일반 댓글**을 자동 수집하고, Gemini 2.5를 활용하여 유의미한 댓글 필터링 및 sLLM 학습용 요약 데이터를 생성하는 파이프라인입니다.
 
 ## 파이프라인 개요
 
-```
-inputs/channels.jsonl ─► scripts/crowl_comments.sh ─► comment_results/combined_data.jsonl ─► scripts/run_gemini.sh ─► comment_results/gemini_results_for_training.jsonl
-                        (채널별 최신 영상 수집)      (transcript + 댓글 원시 데이터)        (Gemini 2.5 요약)        (sLLM 학습 데이터)
+```text
+inputs/channels.jsonl ─► scripts/crowl_comments.sh ─► comment_results/combined_data.jsonl
+                        (채널별 최신 영상 수집)      (transcript + 댓글 원시 데이터)        
+
+[선택 1] 댓글 필터링: 
+combined_data.jsonl ─► scripts/filter_comments.sh ─► comment_results/filtered_comments.jsonl
+                      (Gemini 2.5 기반 유의미한 댓글 선별)
+
+[선택 2] 영상 요약:
+combined_data.jsonl ─► scripts/run_gemini.sh ─► comment_results/gemini_results_for_training.jsonl
+                      (Gemini 2.5 영상 및 반응 요약)
 ```
 
 ## 요구사항
@@ -66,7 +74,17 @@ cp .env.example .env
 | `combined_data.jsonl` | 영상별 transcript + 댓글 원시 데이터 |
 | `collection_log.json` | 수집 실행 로그 |
 
-### 3. Gemini 요약 생성
+### 3. Gemini 댓글 필터링 생성 (신규)
+
+수집된 댓글에서 정보성, 의견성, 연관성 기준(각 1~3점)을 평가하여 총점 6점 이상인 유의미한 댓글만 선별합니다. `.env` 파일에 `GEMINI_API_KEY`가 설정되어 있어야 합니다. (선택적으로 `generation_configs/gemini.json` 파일을 통해 모델 설정 및 temperature 등을 관리할 수 있습니다.)
+
+```bash
+./scripts/filter_comments.sh --input comment_results/combined_data.jsonl --output comment_results/filtered_comments.jsonl
+```
+
+출력: `comment_results/filtered_comments.jsonl` — 영상별 평가된 댓글 (총점 및 통과 여부 포함)
+
+### 4. Gemini 요약 생성
 
 `.env` 파일에 `GEMINI_API_KEY`가 설정되어 있어야 합니다.
 
@@ -80,23 +98,25 @@ cp .env.example .env
 
 ```
 datacaptstone/
-├── channel_collector.py       # 메인 수집기: 채널 → 영상 URL 추출 → 데이터 수집
-├── youtube_collector.py       # 단일 영상 수집 모듈 (transcript + 댓글)
-├── batch_collector.py         # URL 리스트 기반 배치 수집 (레거시)
-├── parse_comments.py          # combined_data.jsonl → 댓글/자막 분리 저장 (유틸리티)
-├── summarize_with_gemini.py   # Gemini 2.5 요약 생성 (sLLM 학습용)
-├── analyze_comments.py        # 수집된 댓글 분석 유틸리티
-├── check_timestamps.py        # 타임스탬프 유효성 검사 유틸리티
-├── comment_stats.py           # 댓글 통계 생성 유틸리티
-├── requirements.txt           # Python 패키지 목록
-├── .env                       # 환경 변수 (API 키 등 - Git 제외)
-├── .env.example               # .env 템플릿
+├── channel_collector.py           # 메인 수집기: 채널 → 영상 URL 추출 → 데이터 수집
+├── youtube_collector.py           # 단일 영상 수집 모듈 (transcript + 댓글)
+├── batch_collector.py             # URL 리스트 기반 배치 수집 (레거시)
+├── parse_comments.py              # combined_data.jsonl → 댓글/자막 분리 저장 (유틸리티)
+├── summarize_with_gemini.py       # Gemini 2.5 요약 생성 (sLLM 학습용)
+├── filter_comments_with_gemini.py # Gemini 2.5 댓글 필터링 (평가 기준 적용)
+├── analyze_comments.py            # 수집된 댓글 분석 유틸리티
+├── check_timestamps.py            # 타임스탬프 유효성 검사 유틸리티
+├── comment_stats.py               # 댓글 통계 생성 유틸리티
+├── requirements.txt               # Python 패키지 목록
+├── .env                           # 환경 변수 (API 키 등 - Git 제외)
+├── .env.example                   # .env 템플릿
 ├── inputs/
-│   └── channels.jsonl         # 채널 리스트 입력 파일
-├── comment_results/           # 데이터 수집 결과 저장 폴더
+│   └── channels.jsonl             # 채널 리스트 입력 파일
+├── comment_results/               # 데이터 수집 결과 저장 폴더
 └── scripts/
-    ├── crowl_comments.sh      # 데이터 수집 통합 실행 스크립트
-    └── run_gemini.sh          # Gemini 요약 실행 스크립트
+    ├── crowl_comments.sh          # 데이터 수집 통합 실행 스크립트
+    ├── filter_comments.sh         # Gemini 댓글 필터링 실행 스크립트
+    └── run_gemini.sh              # Gemini 요약 실행 스크립트
 ```
 
 ## 데이터 형식

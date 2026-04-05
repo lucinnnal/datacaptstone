@@ -15,6 +15,7 @@ load_dotenv()
 
 try:
     from google import genai
+    from google.genai import types
 except ImportError:
     print("Please install google-genai: pip install google-genai")
     sys.exit(1)
@@ -53,9 +54,21 @@ def main():
     parser = argparse.ArgumentParser(description="Generate summaries using Gemini 2.5")
     parser.add_argument("input_file", help="Input JSONL file (combined_data.jsonl)")
     parser.add_argument("--output", "-o", default="gemini_results_for_training.jsonl", help="Output JSONL file")
-    parser.add_argument("--model", "-m", default="gemini-2.5-flash", help="Gemini model to use (default: gemini-2.5-flash)")
+    parser.add_argument("--model", "-m", default="gemini-2.5-flash", help="Gemini model to use (default: gemini-2.5-flash). Overridden by config if provided.")
+    parser.add_argument("--config", "-c", default="generation_configs/gemini.json", help="Path to Gemini config file")
     
     args = parser.parse_args()
+    
+    # Load Gemini config
+    gemini_config = {}
+    if os.path.exists(args.config):
+        with open(args.config, 'r', encoding='utf-8') as f:
+            gemini_config = json.load(f)
+    else:
+        print(f"Warning: Config file {args.config} not found. Using defaults.")
+        
+    model_name = gemini_config.get("model_name", args.model)
+    gen_config_params = gemini_config.get("generation_config", {})
     
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -116,8 +129,9 @@ def main():
             
             try:
                 response = client.models.generate_content(
-                    model=args.model,
+                    model=model_name,
                     contents=prompt,
+                    config=types.GenerateContentConfig(**gen_config_params) if gen_config_params else None,
                 )
                 
                 summary_text = response.text
