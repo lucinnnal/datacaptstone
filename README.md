@@ -9,7 +9,7 @@ inputs/channels.jsonl ─► scripts/crowl_comments.sh ─► comment_results/co
                         (채널별 최신 영상 수집)      (transcript + 댓글 원시 데이터)        
 
 [선택 1] 댓글 필터링: 
-combined_data.jsonl ─► scripts/filter_comments.sh ─► comment_results/filtered_comments.jsonl
+combined_data.jsonl ─► scripts/run_filter_gemini.sh ─► comment_results/filtered_comments.jsonl
                       (Gemini 2.5 기반 유의미한 댓글 선별)
 
 [선택 2] 영상 요약:
@@ -19,10 +19,11 @@ combined_data.jsonl ─► scripts/run_gemini.sh ─► comment_results/gemini_r
 
 ## 요구사항
 
-- Python 3.x
+- Python 3.10 (for vllm version)
 - Conda 환경 (`datacapstone`)
 
 ```bash
+conda create -n datacapstone python=3.10
 conda activate datacapstone
 pip install -r requirements.txt
 ```
@@ -35,6 +36,7 @@ pip install -r requirements.txt
 | `youtube-comment-downloader` | 댓글 수집 |
 | `google-genai` | Gemini API 호출 |
 | `python-dotenv` | 환경 변수 관리 (`.env`) |
+| `vllm` | 모델 서빙 패키지 (0.10.0 버전 통일) |
 
 ## 설정 (Environment Variables)
 
@@ -84,7 +86,19 @@ cp .env.example .env
 
 출력: `comment_results/filtered_comments.jsonl` — 영상별 평가된 댓글 (총점 및 통과 여부 포함)
 
-### 4. Gemini 요약 생성
+### 4. EXAONE 댓글 필터링 생성 (신규)
+
+수집된 댓글에서 정보성, 의견성, 연관성 기준(각 1~3점)을 평가하여 총점 6점 이상인 유의미한 댓글만 선별합니다. 로컬 GPU를 활용하여 EXAONE 4.0 32B 모델을 vLLM으로 서빙하고 결과를 추론합니다. `scripts/run_filter_exaone.sh` 스크립트가 서빙과 추론을 자동으로 순차 진행하고 완료 시 서버를 종료합니다.
+
+```bash
+./scripts/run_filter_exaone.sh comment_results/combined_data.jsonl comment_results/filtered_comments_exaone.jsonl 1
+```
+
+- `1` (세 번째 인자)는 텐서 병렬화(Tensor Parallel) 사이즈입니다. (기본값: 1)
+
+출력: `comment_results/filtered_comments_exaone.jsonl` — 영상별 평가된 댓글 (총점 및 통과 여부 포함)
+
+### 5. Gemini 요약 생성
 
 `.env` 파일에 `GEMINI_API_KEY`가 설정되어 있어야 합니다.
 
@@ -104,6 +118,7 @@ datacaptstone/
 ├── parse_comments.py              # combined_data.jsonl → 댓글/자막 분리 저장 (유틸리티)
 ├── summarize_with_gemini.py       # Gemini 2.5 요약 생성 (sLLM 학습용)
 ├── filter_comments_with_gemini.py # Gemini 2.5 댓글 필터링 (평가 기준 적용)
+├── filter_comments_with_exaone.py # EXAONE 4.0 32B 댓글 필터링 (vLLM 활용)
 ├── analyze_comments.py            # 수집된 댓글 분석 유틸리티
 ├── check_timestamps.py            # 타임스탬프 유효성 검사 유틸리티
 ├── comment_stats.py               # 댓글 통계 생성 유틸리티
@@ -115,7 +130,8 @@ datacaptstone/
 ├── comment_results/               # 데이터 수집 결과 저장 폴더
 └── scripts/
     ├── crowl_comments.sh          # 데이터 수집 통합 실행 스크립트
-    ├── filter_comments.sh         # Gemini 댓글 필터링 실행 스크립트
+    ├── run_filter_gemini.sh       # Gemini 댓글 필터링 실행 스크립트
+    ├── run_filter_exaone.sh       # EXAONE 댓글 필터링 서빙 및 추론 실행 스크립트
     └── run_gemini.sh              # Gemini 요약 실행 스크립트
 ```
 
@@ -135,3 +151,4 @@ datacaptstone/
   "regular_comments": [{"text": "좋은 영상이네요", ...}, ...]
 }
 ```
+`

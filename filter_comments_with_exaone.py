@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Filter YouTube Comments with Gemini 2.5 Flash
-Reads combined_data.jsonl, scores comments based on criteria using Gemini,
+Filter YouTube Comments with EXAONE 4.0 32B via vLLM
+Reads combined_data.jsonl, scores comments based on criteria using EXAONE,
 and outputs filtered results to a new JSONL file.
 """
 
@@ -10,17 +10,12 @@ import os
 import sys
 import argparse
 import time
-from dotenv import load_dotenv
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-
-load_dotenv()
+from typing import List, Dict, Any
 
 try:
-    from google import genai
-    from google.genai import types
+    from openai import OpenAI
 except ImportError:
-    print("Please install google-genai: pip install google-genai")
+    print("Please install openai: pip install openai")
     sys.exit(1)
 
 PROMPT_TEMPLATE = """
@@ -81,33 +76,15 @@ def prepare_comments_for_prompt(comments: List[Dict[str, Any]], id_prefix: str) 
     return json.dumps(formatted, ensure_ascii=False, indent=2)
 
 def main():
-    parser = argparse.ArgumentParser(description="Filter comments using Gemini 2.5 Flash")
+    parser = argparse.ArgumentParser(description="Filter comments using EXAONE 4.0 32B via vLLM")
     parser.add_argument("--input", "-i", default="comment_results/combined_data.jsonl", help="Input JSONL file")
-    parser.add_argument("--output", "-o", default="comment_results/filtered_comments.jsonl", help="Output JSONL file")
-    parser.add_argument("--config", "-c", default="generation_configs/gemini.json", help="Path to Gemini config file")
+    parser.add_argument("--output", "-o", default="comment_results/filtered_comments_exaone.jsonl", help="Output JSONL file")
+    parser.add_argument("--host", default="http://localhost:8000/v1", help="vLLM API Base URL")
+    parser.add_argument("--model", default="LGAI-EXAONE/EXAONE-4.0-32B", help="Model name")
     
     args = parser.parse_args()
     
-    # Load Gemini config
-    gemini_config = {}
-    if os.path.exists(args.config):
-        with open(args.config, 'r', encoding='utf-8') as f:
-            gemini_config = json.load(f)
-    else:
-        print(f"Warning: Config file {args.config} not found. Using defaults.")
-        
-    model_name = gemini_config.get("model_name", "gemini-2.5-flash")
-    gen_config_params = gemini_config.get("generation_config", {"temperature": 0.1})
-    if "response_mime_type" in gen_config_params:
-        del gen_config_params["response_mime_type"]
-    
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        print("Error: GEMINI_API_KEY environment variable is not set.")
-        print("Please export it: export GEMINI_API_KEY='your_api_key'")
-        sys.exit(1)
-        
-    client = genai.Client(api_key=api_key)
+    client = OpenAI(base_url=args.host, api_key="EMPTY")
     
     if not os.path.exists(args.input):
         print(f"Error: {args.input} not found.")
@@ -158,6 +135,11 @@ def main():
             regular_comments = data.get('regular_comments', [])
             timestamp_comments = data.get('timestamp_comments', [])
             
+            # Skip if there are no comments to process
+            if not regular_comments and not timestamp_comments:
+                print(f"[{idx}/{len(lines)}] Skipping video with no comments: {video_url}")
+                continue
+            
             # Prepare comment data strings
             general_comments_str = prepare_comments_for_prompt(regular_comments, "g")
             timestamp_comments_str = prepare_comments_for_prompt(timestamp_comments, "t")
@@ -172,14 +154,17 @@ def main():
             retry_count = 0
             while retry_count < max_retries:
                 try:
-                    # Use JSON schema to enforce the output format and ensure strict JSON response
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(**gen_config_params),
+                    # Request structure adapted for OpenAI client targeting vLLM
+                    response = client.chat.completions.create(
+                        model=args.model,
+                        messages=[
+                            {"role": "system", "content": "You are a helpful assistant that strictly outputs the requested format."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1
                     )
                     
-                    response_text = response.text.strip()
+                    response_text = response.choices[0].message.content.strip()
                     
                     # Clean up potential markdown formatting just in case
                     if response_text.startswith("```json"):
@@ -229,7 +214,7 @@ def main():
                             "timestamp_comments": timestamp_results
                         }
                     except Exception as e:
-                        print(f"  ✗ Failed to parse TSV response from Gemini: {e}")
+                        print(f"  ✗ Failed to parse TSV response from EXAONE: {e}")
                         print(f"  Raw response: {response_text[:100]}...")
                         break # Break out of retry loop for parsing errors
                     
@@ -250,20 +235,12 @@ def main():
                     g_pass = sum(1 for c in evaluation_result.get('general_comments', []) if c.get('is_pass'))
                     t_pass = sum(1 for c in evaluation_result.get('timestamp_comments', []) if c.get('is_pass'))
                     print(f"  ✓ Processed! Passed/Total: {g_pass}/{g_total} general, {t_pass}/{t_total} timestamp comments.")
-                    
-                    # Sleep briefly to avoid aggressive rate limiting
-                    time.sleep(4.5)
                     break # Success, break out of retry loop
                     
                 except Exception as e:
-                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                        retry_count += 1
-                        wait_time = 15 * retry_count
-                        print(f"  ⚠ Rate limit hit. Waiting {wait_time} seconds before retrying ({retry_count}/{max_retries})...")
-                        time.sleep(wait_time)
-                    else:
-                        print(f"  ✗ Error during evaluation: {e}")
-                        break
+                    retry_count += 1
+                    print(f"  ⚠ Request failed. Error: {e}. Retrying ({retry_count}/{max_retries})...")
+                    time.sleep(3 * retry_count)
 
 if __name__ == "__main__":
     main()
