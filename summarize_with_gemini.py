@@ -9,6 +9,9 @@ import os
 import sys
 import argparse
 import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
     from google import genai

@@ -31,7 +31,7 @@ if [ $# -lt 1 ]; then
 fi
 
 INPUT_FILE="$1"
-OUTPUT_FILE="${2:-output_dir/gemini_results_for_training.jsonl}"
+OUTPUT_FILE="${2:-comment_results/gemini_results_for_training.jsonl}"
 
 # Initialize conda
 eval "$(conda shell.bash hook)"
@@ -43,7 +43,7 @@ echo -e "${YELLOW}Using Python from: $(which python)${NC}"
 echo ""
 
 echo -e "${GREEN}Starting Gemini Summary Generation...${NC}"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 python summarize_with_gemini.py "$INPUT_FILE" --output "$OUTPUT_FILE"
 
 EXIT_CODE=$?

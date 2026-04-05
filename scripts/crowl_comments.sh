@@ -30,7 +30,7 @@ if [ $# -lt 1 ]; then
 fi
 
 CHANNELS_FILE="$1"
-OUTPUT_DIR="${2:-output_dir}"
+OUTPUT_DIR="${2:-comment_results}"
 VIDEOS_PER_CHANNEL="${3:-10}"
 
 # Initialize conda
@@ -43,7 +43,7 @@ echo -e "${YELLOW}Using Python from: $(which python)${NC}"
 echo ""
 
 # Run channel collector
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 python channel_collector.py "$CHANNELS_FILE" \
     --output-dir "$OUTPUT_DIR" \
     --videos-per-channel "$VIDEOS_PER_CHANNEL" \

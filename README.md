@@ -5,9 +5,8 @@ YouTube 채널 리스트를 입력받아 각 채널의 최신 영상에서 **tra
 ## 파이프라인 개요
 
 ```
-channels.jsonl ─► channel_collector.py ─► combined_data.jsonl ─► summarize_with_gemini.py ─► gemini_results_for_training.jsonl
-                  (채널별 최신 10개 영상      (transcript + 댓글       (Gemini 2.5 요약)           (sLLM 학습 데이터)
-                   URL 추출 → 데이터 수집)     원시 데이터)
+inputs/channels.jsonl ─► scripts/crowl_comments.sh ─► comment_results/combined_data.jsonl ─► scripts/run_gemini.sh ─► comment_results/gemini_results_for_training.jsonl
+                        (채널별 최신 영상 수집)      (transcript + 댓글 원시 데이터)        (Gemini 2.5 요약)        (sLLM 학습 데이터)
 ```
 
 ## 요구사항
@@ -27,31 +26,40 @@ pip install -r requirements.txt
 | `youtube-transcript-api` | 자막(transcript) 수집 |
 | `youtube-comment-downloader` | 댓글 수집 |
 | `google-genai` | Gemini API 호출 |
+| `python-dotenv` | 환경 변수 관리 (`.env`) |
+
+## 설정 (Environment Variables)
+
+프로젝트 루트 디렉토리에 `.env` 파일을 생성하고 Gemini API 키를 설정합니다. `.env.example` 파일을 참고하세요.
+
+```bash
+cp .env.example .env
+# .env 파일을 열어 API 키를 입력하세요.
+# GEMINI_API_KEY=your_actual_api_key_here
+```
 
 ## 사용법
 
 ### 1. 채널 리스트 준비
 
-`channels.jsonl` 파일에 수집할 채널을 한 줄에 하나씩 JSON 형식으로 작성합니다.
+`inputs/channels.jsonl` 파일에 수집할 채널을 한 줄에 하나씩 JSON 형식으로 작성합니다.
 
 ```jsonl
 {"channel_url": "https://www.youtube.com/@channel_handle", "channel_name": "채널이름1"}
 {"channel_url": "https://www.youtube.com/channel/UC...", "channel_name": "채널이름2"}
 ```
 
-지원하는 필드: `channel_url` (또는 `url`, `channel`), `channel_name` (또는 `name`)
-
 ### 2. 데이터 수집 실행
 
 ```bash
-./run.sh channels.jsonl [output_directory] [videos_per_channel]
+./scripts/crowl_comments.sh inputs/channels.jsonl [output_directory] [videos_per_channel]
 ```
 
-- `channels.jsonl` — 채널 리스트 파일 (필수)
-- `output_directory` — 출력 디렉토리 (기본값: `output_dir`)
+- `inputs/channels.jsonl` — 채널 리스트 파일 (기본 위치)
+- `output_directory` — 출력 디렉토리 (기본값: `comment_results`)
 - `videos_per_channel` — 채널당 수집할 영상 수 (기본값: `10`)
 
-#### 수집 결과 (output_dir/)
+#### 수집 결과 (`comment_results/`)
 | 파일 | 내용 |
 |------|------|
 | `urls.jsonl` | 수집 대상 영상 URL 목록 |
@@ -60,12 +68,13 @@ pip install -r requirements.txt
 
 ### 3. Gemini 요약 생성
 
+`.env` 파일에 `GEMINI_API_KEY`가 설정되어 있어야 합니다.
+
 ```bash
-export GEMINI_API_KEY="your_api_key_here"
-./run_gemini.sh output_dir/combined_data.jsonl [output.jsonl]
+./scripts/run_gemini.sh comment_results/combined_data.jsonl [output.jsonl]
 ```
 
-출력: `gemini_results_for_training.jsonl` — 영상별 요약 (sLLM 학습 데이터)
+출력: `comment_results/gemini_results_for_training.jsonl` — 영상별 요약 (sLLM 학습 데이터)
 
 ## 프로젝트 구조
 
@@ -75,12 +84,19 @@ datacaptstone/
 ├── youtube_collector.py       # 단일 영상 수집 모듈 (transcript + 댓글)
 ├── batch_collector.py         # URL 리스트 기반 배치 수집 (레거시)
 ├── parse_comments.py          # combined_data.jsonl → 댓글/자막 분리 저장 (유틸리티)
-├── summarize_with_gemini.py   # Gemini 2.5 요약 생성
-├── channels.jsonl             # 채널 리스트 입력 파일
-├── run.sh                     # 데이터 수집 실행 스크립트
-├── run_gemini.sh              # Gemini 요약 실행 스크립트
+├── summarize_with_gemini.py   # Gemini 2.5 요약 생성 (sLLM 학습용)
+├── analyze_comments.py        # 수집된 댓글 분석 유틸리티
+├── check_timestamps.py        # 타임스탬프 유효성 검사 유틸리티
+├── comment_stats.py           # 댓글 통계 생성 유틸리티
 ├── requirements.txt           # Python 패키지 목록
-└── output_dir/                # 출력 디렉토리
+├── .env                       # 환경 변수 (API 키 등 - Git 제외)
+├── .env.example               # .env 템플릿
+├── inputs/
+│   └── channels.jsonl         # 채널 리스트 입력 파일
+├── comment_results/           # 데이터 수집 결과 저장 폴더
+└── scripts/
+    ├── crowl_comments.sh      # 데이터 수집 통합 실행 스크립트
+    └── run_gemini.sh          # Gemini 요약 실행 스크립트
 ```
 
 ## 데이터 형식
@@ -97,16 +113,5 @@ datacaptstone/
   "transcript": [{"text": "...", "start": 0.0, "duration": 3.5}, ...],
   "timestamp_comments": [{"text": "1:23 이 부분 좋아요", "timestamps_found": [...], ...}, ...],
   "regular_comments": [{"text": "좋은 영상이네요", ...}, ...]
-}
-```
-
-### gemini_results_for_training.jsonl (한 줄 = 한 영상)
-```json
-{
-  "video_url": "...",
-  "video_id": "...",
-  "video_length": 600,
-  "prompt": "...",
-  "gemini_summary": "1. 비디오 핵심 요약 ... 2. 주요 하이라이트 ... 3. 시청자 반응 요약 ..."
 }
 ```
