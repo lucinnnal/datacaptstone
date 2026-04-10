@@ -24,14 +24,14 @@ if [ $# -lt 1 ]; then
     echo "Usage: $0 <channels.jsonl> [output_directory] [videos_per_channel]"
     echo ""
     echo "  channels.jsonl       JSONL file with channel URLs"
-    echo "  output_directory     Output directory (default: output_dir)"
-    echo "  videos_per_channel   Number of videos per channel (default: 10)"
+    echo "  output_directory     Output directory (default: comment_results)"
+    echo "  fetch_limit          Max videos to fetch per channel (default: 200)"
     exit 1
 fi
 
 CHANNELS_FILE="$1"
 OUTPUT_DIR="${2:-comment_results}"
-VIDEOS_PER_CHANNEL="${3:-10}"
+FETCH_LIMIT="${3:-300}"
 
 # Initialize conda
 eval "$(conda shell.bash hook)"
@@ -46,9 +46,8 @@ echo ""
 cd "$SCRIPT_DIR/.."
 python channel_collector.py "$CHANNELS_FILE" \
     --output-dir "$OUTPUT_DIR" \
-    --videos-per-channel "$VIDEOS_PER_CHANNEL" \
-    --max-comments 50 \
-    --sort-by 0
+    --fetch-limit "$FETCH_LIMIT" \
+    --max-comments 100
 
 EXIT_CODE=$?
 

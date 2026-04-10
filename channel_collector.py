@@ -17,25 +17,24 @@ def _is_valid_video_id(video_id):
     return bool(re.fullmatch(r'[a-zA-Z0-9_-]{11}', video_id))
 
 
-def get_channel_videos(channel_url, max_videos=10):
+def get_channel_videos(channel_url, fetch_limit=200):
     """
-    Use yt-dlp to fetch the latest videos from a YouTube channel.
-    Appends /videos to the channel URL to target only regular uploads (skip Shorts/playlists).
-    Returns a list of dicts with video url, title, upload_date, etc.
+    Use yt-dlp to fetch videos from a YouTube channel.
+    - Filters to only videos with duration 5-30 minutes (300-1800 seconds).
+    - Sorts by comment_count descending; falls back to view_count if unavailable.
+    Returns a list of dicts with video metadata.
     """
     import yt_dlp
 
-    # Ensure we're targeting the /videos tab to avoid Shorts and playlists
     clean_url = channel_url.rstrip('/')
     if not clean_url.endswith('/videos'):
         clean_url += '/videos'
 
-    # Request more entries than needed so we can filter out non-video items
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'extract_flat': True,
-        'playlistend': max_videos * 3,
+        'playlistend': fetch_limit,
         'nocheckcertificate': True,
     }
 
@@ -48,9 +47,7 @@ def get_channel_videos(channel_url, max_videos=10):
                 print(f"  Warning: Could not extract info from {clean_url}")
                 return []
 
-            entries = info.get('entries', [])
-            if entries is None:
-                entries = []
+            entries = info.get('entries', []) or []
 
             for entry in entries:
                 if entry is None:
@@ -59,23 +56,36 @@ def get_channel_videos(channel_url, max_videos=10):
                 if not video_id:
                     continue
 
-                # Skip non-video entries (channel IDs, playlist IDs, etc.)
                 if not _is_valid_video_id(video_id):
                     continue
 
-                video_url = f"https://www.youtube.com/watch?v={video_id}"
+                duration = entry.get('duration') or 0
 
+                # Filter: only 5-30 minute videos (300-1800 seconds)
+                if not (300 <= duration <= 1800):
+                    continue
+
+                video_url = f"https://www.youtube.com/watch?v={video_id}"
                 videos.append({
                     'url': video_url,
                     'title': entry.get('title', ''),
                     'upload_date': entry.get('upload_date', ''),
+                    'duration': duration,
+                    'comment_count': entry.get('comment_count'),  # may be None
+                    'view_count': entry.get('view_count') or 0,
                 })
-
-                if len(videos) >= max_videos:
-                    break
 
     except Exception as e:
         print(f"  Error fetching channel videos: {e}")
+
+    # Sort by comment_count if available, otherwise by view_count
+    has_comment_count = any(v['comment_count'] is not None for v in videos)
+    if has_comment_count:
+        videos.sort(key=lambda v: (v['comment_count'] or 0), reverse=True)
+        print(f"  Sorted {len(videos)} eligible videos by comment count")
+    else:
+        videos.sort(key=lambda v: v['view_count'], reverse=True)
+        print(f"  Sorted {len(videos)} eligible videos by view count (comment count unavailable)")
 
     return videos
 
@@ -112,6 +122,11 @@ def load_channels(jsonl_file):
     return channels
 
 
+CHANNEL_VIDEO_TARGET = 300     # videos to collect per channel
+MIN_REGULAR_PER_VIDEO = 5      # minimum regular comments required per video
+MIN_TIMESTAMP_PER_VIDEO = 5    # minimum timestamp comments required per video
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Collect YouTube data from a list of channels"
@@ -119,24 +134,24 @@ def main():
     parser.add_argument("channels_file", help="Input JSONL file with channel URLs")
     parser.add_argument("--output-dir", "-o", default="output_dir",
                         help="Output directory (default: output_dir)")
-    parser.add_argument("--videos-per-channel", "-n", type=int, default=10,
-                        help="Number of latest videos to collect per channel (default: 10)")
-    parser.add_argument("--max-comments", "-m", type=int, default=50,
-                        help="Max regular comments per video (default: 50)")
-    parser.add_argument("--sort-by", "-s", type=int, choices=[0, 1], default=0,
-                        help="Sort comments: 0=Popular, 1=Recent (default: 0)")
+    parser.add_argument("--fetch-limit", "-n", type=int, default=300,
+                        help="Max videos to fetch per channel for filtering/sorting (default: 300)")
+    parser.add_argument("--max-comments", "-m", type=int, default=100,
+                        help="Max comments to collect per video (default: 100)")
 
     args = parser.parse_args()
 
     print("=" * 60)
     print("YouTube Channel Data Collector")
     print("=" * 60)
-    print(f"Channels file : {args.channels_file}")
-    print(f"Output dir    : {args.output_dir}")
-    print(f"Videos/channel: {args.videos_per_channel}")
-    print(f"Max comments  : {args.max_comments}")
-    print(f"Sort by       : {'Popular' if args.sort_by == 0 else 'Recent'}")
-    print(f"Started at    : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Channels file      : {args.channels_file}")
+    print(f"Output dir         : {args.output_dir}")
+    print(f"Fetch limit/channel: {args.fetch_limit} videos")
+    print(f"Max comments/video : {args.max_comments}")
+    print(f"Target/channel     : {CHANNEL_VIDEO_TARGET} videos")
+    print(f"Min per video      : {MIN_REGULAR_PER_VIDEO} regular, {MIN_TIMESTAMP_PER_VIDEO} timestamp")
+    print(f"Video duration     : 5-30 minutes")
+    print(f"Started at         : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     print()
 
@@ -149,112 +164,129 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Phase 1: Fetch video URLs from each channel
-    print("-" * 60)
-    print("Phase 1: Fetching video URLs from channels")
-    print("-" * 60)
+    import youtube_collector
 
-    all_videos = []  # list of (channel_name, video_info)
+    combined_output = os.path.join(args.output_dir, "combined_data.jsonl")
     urls_file = os.path.join(args.output_dir, "urls.jsonl")
 
-    with open(urls_file, 'w', encoding='utf-8') as f:
-        for idx, ch in enumerate(channels, 1):
+    success_channels = 0
+    skipped_channels = 0
+    total_videos_written = 0
+
+    with open(combined_output, 'w', encoding='utf-8') as f_out, \
+         open(urls_file, 'w', encoding='utf-8') as f_urls:
+
+        for ch_idx, ch in enumerate(channels, 1):
             channel_url = ch['channel_url']
-            channel_name = ch.get('channel_name', f'channel_{idx}')
+            channel_name = ch.get('channel_name', f'channel_{ch_idx}')
 
-            print(f"\n[{idx}/{len(channels)}] {channel_name}: {channel_url}")
-            videos = get_channel_videos(channel_url, max_videos=args.videos_per_channel)
-            print(f"  Found {len(videos)} video(s)")
+            print(f"\n{'=' * 60}")
+            print(f"[{ch_idx}/{len(channels)}] {channel_name}")
+            print(f"  URL: {channel_url}")
 
+            # Phase 1: Fetch, filter (5-30 min), and sort videos
+            videos = get_channel_videos(channel_url, fetch_limit=args.fetch_limit)
+
+            if not videos:
+                print(f"  -> SKIPPED: No eligible videos (5-30 min) found")
+                skipped_channels += 1
+                continue
+
+            # Write eligible video URLs
             for v in videos:
-                entry = {
+                f_urls.write(json.dumps({
                     'url': v['url'],
                     'title': v.get('title', ''),
                     'channel_name': channel_name,
                     'channel_url': channel_url,
-                }
-                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
-                all_videos.append(entry)
+                    'duration': v.get('duration'),
+                    'comment_count': v.get('comment_count'),
+                    'view_count': v.get('view_count'),
+                }, ensure_ascii=False) + '\n')
 
-    print(f"\nTotal videos to collect: {len(all_videos)}")
-    print(f"Video URLs saved to: {urls_file}\n")
+            # Phase 2: Collect comments per video until channel target is reached
+            channel_videos = 0
+            channel_data = []
 
-    if not all_videos:
-        print("No videos found. Exiting.")
-        sys.exit(1)
+            for v_idx, v in enumerate(videos, 1):
+                if channel_videos >= CHANNEL_VIDEO_TARGET:
+                    break
 
-    # Phase 2: Collect transcript + comments for each video
-    print("-" * 60)
-    print("Phase 2: Collecting transcripts and comments")
-    print("-" * 60)
+                url = v['url']
+                title = v.get('title', '')
+                dur_min = int(v.get('duration') or 0) // 60
+                dur_sec = int(v.get('duration') or 0) % 60
+                print(f"\n  [{v_idx}/{len(videos)}] {title} ({dur_min}:{dur_sec:02d})")
+                print(f"    URL: {url}")
 
-    import youtube_collector
+                try:
+                    data = youtube_collector.collect_video_data(
+                        video_url=url,
+                        max_regular=args.max_comments,
+                        max_timestamp=args.max_comments,
+                        sort_by=0,  # sort by popularity
+                    )
+                    data['channel_name'] = channel_name
+                    data['channel_url'] = channel_url
+                    data['title'] = title
 
-    combined_output = os.path.join(args.output_dir, "combined_data.jsonl")
-    success_count = 0
-    fail_count = 0
-
-    with open(combined_output, 'w', encoding='utf-8') as f_out:
-        for idx, entry in enumerate(all_videos, 1):
-            url = entry['url']
-            ch_name = entry.get('channel_name', '')
-            title = entry.get('title', '')
-
-            print(f"\n[{idx}/{len(all_videos)}] ({ch_name}) {title}")
-            print(f"  URL: {url}")
-
-            try:
-                data = youtube_collector.collect_video_data(
-                    video_url=url,
-                    max_regular=args.max_comments,
-                    max_timestamp=50,
-                    sort_by=args.sort_by,
-                )
-                # Attach channel info
-                data['channel_name'] = ch_name
-                data['channel_url'] = entry.get('channel_url', '')
-                data['title'] = title
-
-                f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
-                f_out.flush()
-
-                if data.get('success'):
                     tc = len(data.get('timestamp_comments', []))
                     rc = len(data.get('regular_comments', []))
-                    tr = len(data.get('transcript', []))
-                    print(f"  -> transcript: {tr}, timestamp comments: {tc}, regular comments: {rc}")
-                    success_count += 1
-                else:
-                    print("  -> Failed to collect complete data")
-                    fail_count += 1
 
-            except Exception as e:
-                print(f"  -> Error: {e}")
-                fail_count += 1
+                    # Skip video if it doesn't meet minimum comment thresholds
+                    if rc < MIN_REGULAR_PER_VIDEO or tc < MIN_TIMESTAMP_PER_VIDEO:
+                        print(f"    -> SKIPPED: regular={rc}, timestamp={tc} "
+                              f"(need >= {MIN_REGULAR_PER_VIDEO} each)")
+                        continue
+
+                    channel_data.append(data)
+                    channel_videos += 1
+                    tr = len(data.get('transcript', []))
+                    print(f"    -> transcript={tr}, regular={rc}, timestamp={tc} | "
+                          f"channel videos={channel_videos}")
+
+                except Exception as e:
+                    print(f"    -> Error: {e}")
+
+            # Write all collected videos for this channel (even if under target)
+            if not channel_data:
+                print(f"\n  -> CHANNEL SKIPPED: no videos passed the minimum thresholds")
+                skipped_channels += 1
+                continue
+
+            for data in channel_data:
+                f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
+            f_out.flush()
+
+            total_videos_written += len(channel_data)
+            print(f"\n  -> CHANNEL OK: {len(channel_data)} videos collected"
+                  + (f" (target {CHANNEL_VIDEO_TARGET} reached)" if channel_videos >= CHANNEL_VIDEO_TARGET else f" (all available, under target {CHANNEL_VIDEO_TARGET})"))
+            success_channels += 1
 
     # Summary
     print("\n" + "=" * 60)
     print("COLLECTION COMPLETE")
     print("=" * 60)
     print(f"Channels processed : {len(channels)}")
-    print(f"Videos processed   : {success_count + fail_count}")
-    print(f"  Successful       : {success_count}")
-    print(f"  Failed           : {fail_count}")
+    print(f"  Collected        : {success_channels}")
+    print(f"  Skipped          : {skipped_channels}")
+    print(f"Videos written     : {total_videos_written}")
     print(f"\nOutput files in '{args.output_dir}/':")
-    print(f"  - urls.jsonl              (video URL list)")
+    print(f"  - urls.jsonl              (eligible video URL list)")
     print(f"  - combined_data.jsonl     (raw collected data)")
 
-    # Save run log
     log_file = os.path.join(args.output_dir, 'collection_log.json')
     with open(log_file, 'w', encoding='utf-8') as f:
         json.dump({
             'timestamp': datetime.now().isoformat(),
             'channels_file': args.channels_file,
             'channels_count': len(channels),
-            'videos_per_channel': args.videos_per_channel,
-            'total_videos': success_count + fail_count,
-            'successful': success_count,
-            'failed': fail_count,
+            'channels_collected': success_channels,
+            'channels_skipped': skipped_channels,
+            'videos_written': total_videos_written,
+            'channel_video_target': CHANNEL_VIDEO_TARGET,
+            'min_regular_per_video': MIN_REGULAR_PER_VIDEO,
+            'min_timestamp_per_video': MIN_TIMESTAMP_PER_VIDEO,
         }, f, ensure_ascii=False, indent=2)
     print(f"  - collection_log.json     (run summary)")
     print(f"\nFinished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

@@ -161,7 +161,8 @@ def main():
                             {"role": "system", "content": "You are a helpful assistant that strictly outputs the requested format."},
                             {"role": "user", "content": prompt}
                         ],
-                        temperature=0.1
+                        temperature=0.1,
+                        max_tokens=8192
                     )
                     
                     response_text = response.choices[0].message.content.strip()

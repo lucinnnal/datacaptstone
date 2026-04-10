@@ -128,10 +128,14 @@ def get_comments(video_url, sort_by=0, max_regular=50, max_timestamp=50):
         skipped_no_timestamp = 0
         
         for comment in generator:
+            # Skip reply comments (대댓글)
+            if comment.get('reply'):
+                continue
+
             scanned_count += 1
             if scanned_count > max_scans_limit:
                 break
-                
+
             comment_text = comment.get('text', '')
             timestamps = parse_timestamp(comment_text)
             
