@@ -62,12 +62,21 @@ cp .env.example .env
 ### 2. 데이터 수집 실행
 
 ```bash
-./scripts/crowl_comments.sh inputs/channels.jsonl [output_directory] [videos_per_channel]
+./scripts/crowl_comments.sh inputs/channels.jsonl [output_directory] [fetch_limit]
 ```
 
 - `inputs/channels.jsonl` — 채널 리스트 파일 (기본 위치)
 - `output_directory` — 출력 디렉토리 (기본값: `comment_results`)
-- `videos_per_channel` — 채널당 수집할 영상 수 (기본값: `10`)
+- `fetch_limit` — 채널당 fetch할 최대 영상 수 (기본값: `300`)
+
+#### 수집 조건
+| 조건 | 내용 |
+|------|------|
+| 영상 길이 | 5분 ~ 30분만 수집 |
+| 영상 정렬 | 댓글수 내림차순 (불가 시 조회수 내림차순) |
+| 채널당 목표 | 최대 300개 영상 수집 후 중단 (미달 시 있는 대로 수집) |
+| 대댓글 | 수집 제외 |
+| 영상 스킵 조건 | 일반 댓글 또는 timestamp 댓글이 각각 5개 미만인 영상 제외 |
 
 #### 수집 결과 (`comment_results/`)
 | 파일 | 내용 |
