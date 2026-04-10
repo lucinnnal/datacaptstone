@@ -169,12 +169,28 @@ def main():
     combined_output = os.path.join(args.output_dir, "combined_data.jsonl")
     urls_file = os.path.join(args.output_dir, "urls.jsonl")
 
+    # Load already processed video URLs from existing combined_data.jsonl
+    processed_urls = set()
+    if os.path.exists(combined_output):
+        with open(combined_output, 'r', encoding='utf-8') as f_existing:
+            for line in f_existing:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                    if d.get('video_url'):
+                        processed_urls.add(d['video_url'])
+                except json.JSONDecodeError:
+                    pass
+        print(f"Resuming: {len(processed_urls)} already processed video(s) will be skipped\n")
+
     success_channels = 0
     skipped_channels = 0
     total_videos_written = 0
 
-    with open(combined_output, 'w', encoding='utf-8') as f_out, \
-         open(urls_file, 'w', encoding='utf-8') as f_urls:
+    with open(combined_output, 'a', encoding='utf-8') as f_out, \
+         open(urls_file, 'a', encoding='utf-8') as f_urls:
 
         for ch_idx, ch in enumerate(channels, 1):
             channel_url = ch['channel_url']
@@ -206,7 +222,6 @@ def main():
 
             # Phase 2: Collect comments per video until channel target is reached
             channel_videos = 0
-            channel_data = []
 
             for v_idx, v in enumerate(videos, 1):
                 if channel_videos >= CHANNEL_VIDEO_TARGET:
@@ -218,6 +233,11 @@ def main():
                 dur_sec = int(v.get('duration') or 0) % 60
                 print(f"\n  [{v_idx}/{len(videos)}] {title} ({dur_min}:{dur_sec:02d})")
                 print(f"    URL: {url}")
+
+                if url in processed_urls:
+                    print(f"    -> SKIPPED: already processed")
+                    channel_videos += 1  # count toward channel target
+                    continue
 
                 try:
                     data = youtube_collector.collect_video_data(
@@ -239,8 +259,10 @@ def main():
                               f"(need >= {MIN_REGULAR_PER_VIDEO} each)")
                         continue
 
-                    channel_data.append(data)
+                    f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
+                    f_out.flush()
                     channel_videos += 1
+                    total_videos_written += 1
                     tr = len(data.get('transcript', []))
                     print(f"    -> transcript={tr}, regular={rc}, timestamp={tc} | "
                           f"channel videos={channel_videos}")
@@ -248,18 +270,12 @@ def main():
                 except Exception as e:
                     print(f"    -> Error: {e}")
 
-            # Write all collected videos for this channel (even if under target)
-            if not channel_data:
+            if channel_videos == 0:
                 print(f"\n  -> CHANNEL SKIPPED: no videos passed the minimum thresholds")
                 skipped_channels += 1
                 continue
 
-            for data in channel_data:
-                f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
-            f_out.flush()
-
-            total_videos_written += len(channel_data)
-            print(f"\n  -> CHANNEL OK: {len(channel_data)} videos collected"
+            print(f"\n  -> CHANNEL OK: {channel_videos} videos collected"
                   + (f" (target {CHANNEL_VIDEO_TARGET} reached)" if channel_videos >= CHANNEL_VIDEO_TARGET else f" (all available, under target {CHANNEL_VIDEO_TARGET})"))
             success_channels += 1
 
