@@ -1,0 +1,55 @@
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:299] 
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:299]        █     █     █▄   ▄█
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:299]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.19.0
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:299]   █▄█▀ █     █     █     █  model   /home/irteam/models/exaone45/LGAI-EXAONE/EXAONE-4.5-33B
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:299]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:299] 
+(APIServer pid=7073) INFO 04-09 21:55:12 [utils.py:233] non-default args: {'model_tag': '/home/irteam/models/exaone45/LGAI-EXAONE/EXAONE-4.5-33B', 'enable_auto_tool_choice': True, 'tool_call_parser': 'hermes', 'host': '0.0.0.0', 'model': '/home/irteam/models/exaone45/LGAI-EXAONE/EXAONE-4.5-33B', 'reasoning_parser': 'deepseek_r1'}
+(APIServer pid=7073) Traceback (most recent call last):
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/transformers/utils/hub.py", line 419, in cached_files
+(APIServer pid=7073)     hf_hub_download(
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py", line 84, in _inner_fn
+(APIServer pid=7073)     validate_repo_id(arg_value)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py", line 132, in validate_repo_id
+(APIServer pid=7073)     raise HFValidationError(
+(APIServer pid=7073) huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/home/irteam/models/exaone45/LGAI-EXAONE/EXAONE-4.5-33B'. Use `repo_type` argument if needed.
+(APIServer pid=7073) 
+(APIServer pid=7073) The above exception was the direct cause of the following exception:
+(APIServer pid=7073) 
+(APIServer pid=7073) Traceback (most recent call last):
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/bin/vllm", line 6, in <module>
+(APIServer pid=7073)     sys.exit(main())
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/entrypoints/cli/main.py", line 75, in main
+(APIServer pid=7073)     args.dispatch_function(args)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/entrypoints/cli/serve.py", line 122, in cmd
+(APIServer pid=7073)     uvloop.run(run_server(args))
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/uvloop/__init__.py", line 69, in run
+(APIServer pid=7073)     return loop.run_until_complete(wrapper())
+(APIServer pid=7073)   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/uvloop/__init__.py", line 48, in wrapper
+(APIServer pid=7073)     return await main
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/entrypoints/openai/api_server.py", line 670, in run_server
+(APIServer pid=7073)     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/entrypoints/openai/api_server.py", line 684, in run_server_worker
+(APIServer pid=7073)     async with build_async_engine_client(
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/contextlib.py", line 199, in __aenter__
+(APIServer pid=7073)     return await anext(self.gen)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/entrypoints/openai/api_server.py", line 100, in build_async_engine_client
+(APIServer pid=7073)     async with build_async_engine_client_from_engine_args(
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/contextlib.py", line 199, in __aenter__
+(APIServer pid=7073)     return await anext(self.gen)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/entrypoints/openai/api_server.py", line 124, in build_async_engine_client_from_engine_args
+(APIServer pid=7073)     vllm_config = engine_args.create_engine_config(usage_context=usage_context)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/engine/arg_utils.py", line 1539, in create_engine_config
+(APIServer pid=7073)     maybe_override_with_speculators(
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/vllm/transformers_utils/config.py", line 583, in maybe_override_with_speculators
+(APIServer pid=7073)     config_dict, _ = PretrainedConfig.get_config_dict(
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/transformers/configuration_utils.py", line 572, in get_config_dict
+(APIServer pid=7073)     config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/transformers/configuration_utils.py", line 627, in _get_config_dict
+(APIServer pid=7073)     resolved_config_file = cached_file(
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/transformers/utils/hub.py", line 276, in cached_file
+(APIServer pid=7073)     file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+(APIServer pid=7073)   File "/home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone/lib/python3.10/site-packages/transformers/utils/hub.py", line 468, in cached_files
+(APIServer pid=7073)     raise OSError(f"{e}") from e
+(APIServer pid=7073) OSError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/home/irteam/models/exaone45/LGAI-EXAONE/EXAONE-4.5-33B'. Use `repo_type` argument if needed.

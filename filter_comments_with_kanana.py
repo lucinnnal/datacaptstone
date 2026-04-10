@@ -76,11 +76,11 @@ def prepare_comments_for_prompt(comments: List[Dict[str, Any]], id_prefix: str) 
     return json.dumps(formatted, ensure_ascii=False, indent=2)
 
 def main():
-    parser = argparse.ArgumentParser(description="Filter comments using EXAONE 4.0 32B via vLLM")
+    parser = argparse.ArgumentParser(description="Filter comments using KANANA 4.0 32B via vLLM")
     parser.add_argument("--input", "-i", default="comment_results/combined_data.jsonl", help="Input JSONL file")
-    parser.add_argument("--output", "-o", default="comment_results/filtered_comments_exaone.jsonl", help="Output JSONL file")
+    parser.add_argument("--output", "-o", default="comment_results/filtered_comments_kanana.jsonl", help="Output JSONL file")
     parser.add_argument("--host", default="http://localhost:8000/v1", help="vLLM API Base URL")
-    parser.add_argument("--model", default="LGAI-EXAONE/EXAONE-4.0-32B", help="Model name")
+    parser.add_argument("--model", default="kakaocorp/kanana-2-30b-a3b-instruct", help="Model name")
     
     args = parser.parse_args()
     
@@ -161,27 +161,10 @@ def main():
                             {"role": "system", "content": "You are a helpful assistant that strictly outputs the requested format."},
                             {"role": "user", "content": prompt}
                         ],
-                        temperature=0.1,
+                        temperature=0.1
                     )
                     
-                    message = response.choices[0].message
-                    content_text = message.content or ""
-                    reasoning_text = getattr(message, 'reasoning', getattr(message, 'reasoning_content', ""))
-                    
-                    # 2. content가 비어있다면 reasoning 텍스트를 사용합니다.
-                    response_text = content_text if content_text else reasoning_text
-                    
-                    # 3. 둘 다 비어있을 때만 실패(Retry) 처리합니다.
-                    if not response_text:
-                        finish_reason = response.choices[0].finish_reason
-                        print(f"  ⚠ Both Content and Reasoning are None. finish_reason: {finish_reason}")
-                        print(f"  Usage: {response.usage}")
-                        print(f"  Raw Message Object: {message.model_dump_json(indent=2)}")
-                        retry_count += 1
-                        time.sleep(3 * retry_count)
-                        continue
-
-                    response_text = response_text.strip()
+                    response_text = response.choices[0].message.content.strip()
                     
                     # Clean up potential markdown formatting just in case
                     if response_text.startswith("```json"):

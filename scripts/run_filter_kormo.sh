@@ -22,7 +22,7 @@ else
 fi
 
 if [ $# -lt 2 ]; then
-    OUTPUT_FILE="comment_results/filtered_comments_exaone.jsonl"
+    OUTPUT_FILE="comment_results/filtered_comments_kormo.jsonl"
 else
     OUTPUT_FILE="$2"
 fi
@@ -30,13 +30,12 @@ fi
 TP_SIZE="${3:-1}"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}EXAONE Comment Filter Pipeline${NC}"
+echo -e "${GREEN}KORMO Comment Filter Pipeline${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
 # Initialize conda
 export LD_PRELOAD=$(find /home/irteam/data-ddn/kyungjun/anaconda3/envs/datacapstone -name "libstdc++.so.6" | head -1)
-
 source /home/irteam/data-ddn/kyungjun/anaconda3/etc/profile.d/conda.sh
 conda activate datacapstone
 
@@ -49,16 +48,16 @@ if ! python -c "import openai" &> /dev/null; then
 fi
 
 # Start vLLM Server in the background
-echo -e "${GREEN}Starting EXAONE vLLM server in the background (TP=${TP_SIZE})...${NC}"
+echo -e "${GREEN}Starting KORMO vLLM server in the background (TP=${TP_SIZE})...${NC}"
 
 # Run the vLLM server directly and capture its PID
-vllm serve LGAI-EXAONE/EXAONE-4.0-33B \
+vllm serve KORMo-Team/KORMo-10B-sft \
   --tensor-parallel-size "$TP_SIZE" \
+  --trust-remote-code \
   --enable-auto-tool-choice \
   --tool-call-parser hermes \
-  --reasoning-parser deepseek_r1 \
   --host 0.0.0.0 \
-  --port 8000 > "$ROOT_DIR/exaone_serve.log" 2>&1 &
+  --port 8000 > "$ROOT_DIR/kormo_serve.log" 2>&1 &
 VLLM_PID=$!
 
 echo -e "Server PID: $VLLM_PID"
@@ -93,7 +92,7 @@ echo -e "${GREEN}Server is ready! Starting filtering process...${NC}"
 cd "$ROOT_DIR"
 # Disable set -e temporarily to gracefully shutdown server if inference fails
 set +e
-python filter_comments_with_exaone.py --input "$INPUT_FILE" --output "$OUTPUT_FILE"
+python filter_comments_with_kormo.py --input "$INPUT_FILE" --output "$OUTPUT_FILE"
 INFERENCE_EXIT_CODE=$?
 set -e
 
