@@ -11,6 +11,32 @@ import sys
 import argparse
 from datetime import datetime
 
+
+VIDEO_LOG_FILE = "video_log.json"
+
+
+def load_video_log(log_path):
+    """Load per-video status log. Returns dict keyed by video_id."""
+    if os.path.exists(log_path):
+        with open(log_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def update_video_log(log_path, log, video_id, video_url, title, channel_name, channel_url, status, detail=""):
+    """Update a single video entry in the log and save."""
+    log[video_id] = {
+        'video_url': video_url,
+        'title': title,
+        'channel_name': channel_name,
+        'channel_url': channel_url,
+        'status': status,           # 'collected' | 'skipped' | 'error'
+        'timestamp': datetime.now().isoformat(),
+        'detail': detail,
+    }
+    with open(log_path, 'w', encoding='utf-8') as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
 def _is_valid_video_id(video_id):
     """Check if a string looks like a valid YouTube video ID (11 chars, alphanumeric + _ -)."""
     import re
@@ -168,22 +194,16 @@ def main():
 
     combined_output = os.path.join(args.output_dir, "combined_data.jsonl")
     urls_file = os.path.join(args.output_dir, "urls.jsonl")
+    log_path = os.path.join(args.output_dir, VIDEO_LOG_FILE)
 
-    # Load already processed video URLs from existing combined_data.jsonl
-    processed_urls = set()
-    if os.path.exists(combined_output):
-        with open(combined_output, 'r', encoding='utf-8') as f_existing:
-            for line in f_existing:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                    if d.get('video_url'):
-                        processed_urls.add(d['video_url'])
-                except json.JSONDecodeError:
-                    pass
-        print(f"Resuming: {len(processed_urls)} already processed video(s) will be skipped\n")
+    # Load per-video log (collected / skipped / error)
+    video_log = load_video_log(log_path)
+    done_ids = {vid for vid, entry in video_log.items() if entry['status'] in ('collected', 'skipped')}
+    print(f"Video log loaded: {len(video_log)} entries "
+          f"(collected={sum(1 for e in video_log.values() if e['status']=='collected')}, "
+          f"skipped={sum(1 for e in video_log.values() if e['status']=='skipped')}, "
+          f"error={sum(1 for e in video_log.values() if e['status']=='error')})")
+    print(f"Resuming: {len(done_ids)} video(s) will be skipped (collected or skipped)\n")
 
     success_channels = 0
     skipped_channels = 0
@@ -234,9 +254,13 @@ def main():
                 print(f"\n  [{v_idx}/{len(videos)}] {title} ({dur_min}:{dur_sec:02d})")
                 print(f"    URL: {url}")
 
-                if url in processed_urls:
-                    print(f"    -> SKIPPED: already processed")
-                    channel_videos += 1  # count toward channel target
+                video_id = url.split('v=')[-1].split('&')[0]
+
+                if video_id in done_ids:
+                    status = video_log.get(video_id, {}).get('status', '?')
+                    print(f"    -> SKIP (log: {status})")
+                    if status == 'collected':
+                        channel_videos += 1  # count toward channel target
                     continue
 
                 try:
@@ -255,8 +279,12 @@ def main():
 
                     # Skip video if it doesn't meet minimum comment thresholds
                     if rc < MIN_REGULAR_PER_VIDEO or tc < MIN_TIMESTAMP_PER_VIDEO:
-                        print(f"    -> SKIPPED: regular={rc}, timestamp={tc} "
-                              f"(need >= {MIN_REGULAR_PER_VIDEO} each)")
+                        detail = (f"regular={rc}, timestamp={tc} "
+                                  f"(need >= {MIN_REGULAR_PER_VIDEO} each)")
+                        print(f"    -> SKIPPED: {detail}")
+                        update_video_log(log_path, video_log, video_id, url, title,
+                                         channel_name, channel_url, 'skipped', detail)
+                        done_ids.add(video_id)
                         continue
 
                     f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
@@ -264,11 +292,18 @@ def main():
                     channel_videos += 1
                     total_videos_written += 1
                     tr = len(data.get('transcript', []))
-                    print(f"    -> transcript={tr}, regular={rc}, timestamp={tc} | "
-                          f"channel videos={channel_videos}")
+                    detail = f"regular={rc}, timestamp={tc}, transcript={tr}"
+                    print(f"    -> COLLECTED: {detail} | channel videos={channel_videos}")
+                    update_video_log(log_path, video_log, video_id, url, title,
+                                     channel_name, channel_url, 'collected', detail)
+                    done_ids.add(video_id)
 
                 except Exception as e:
-                    print(f"    -> Error: {e}")
+                    detail = str(e)
+                    print(f"    -> ERROR: {detail}")
+                    update_video_log(log_path, video_log, video_id, url, title,
+                                     channel_name, channel_url, 'error', detail)
+                    # error는 done_ids에 추가하지 않음 → 다음 세션에서 재시도 가능
 
             if channel_videos == 0:
                 print(f"\n  -> CHANNEL SKIPPED: no videos passed the minimum thresholds")
@@ -290,6 +325,7 @@ def main():
     print(f"\nOutput files in '{args.output_dir}/':")
     print(f"  - urls.jsonl              (eligible video URL list)")
     print(f"  - combined_data.jsonl     (raw collected data)")
+    print(f"  - video_log.json          (per-video status: collected/skipped/error)")
 
     log_file = os.path.join(args.output_dir, 'collection_log.json')
     with open(log_file, 'w', encoding='utf-8') as f:

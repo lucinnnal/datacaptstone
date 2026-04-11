@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-04-11T21:47:36.955135",
+  "channels_file": "inputs/channels.jsonl",
+  "channels_count": 5,
+  "channels_collected": 3,
+  "channels_skipped": 2,
+  "videos_written": 29,
+  "channel_video_target": 300,
+  "min_regular_per_video": 5,
+  "min_timestamp_per_video": 5
+}

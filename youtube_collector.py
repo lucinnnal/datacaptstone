@@ -78,31 +78,24 @@ def get_transcript(video_id):
             except:
                 return str(item)
         
-        # Instantiate the API object (required in some versions)
+        # Instantiate the API object (required in newer versions)
         api = YouTubeTranscriptApi()
-        
+
         try:
-            # Using instance methods
+            # Try instance method with ko/en
             transcript_list = api.list(video_id)
             transcript = transcript_list.find_transcript(['ko', 'en'])
             result = transcript.fetch()
             return [convert_to_json_serializable(item) for item in result]
         except Exception:
-            # Fallback for static method call if instance fails
+            # Fallback: try fetching any available transcript via instance
             try:
-                transcript_list = YouTubeTranscriptApi.list(video_id)
-                transcript = transcript_list.find_transcript(['ko', 'en'])
+                transcript_list = api.list(video_id)
+                transcript = transcript_list.find_generated_transcript(['ko', 'en'])
                 result = transcript.fetch()
                 return [convert_to_json_serializable(item) for item in result]
             except Exception as e:
-                # Last resort: common static call
-                if hasattr(YouTubeTranscriptApi, 'get_transcript'):
-                    result = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko', 'en'])
-                    if result:
-                        return [convert_to_json_serializable(item) for item in result]
-                    return None
-                else:
-                    raise e
+                raise e
                     
     except Exception as e:
         print(f"Error getting transcript: {e}")
