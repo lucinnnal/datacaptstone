@@ -55,51 +55,93 @@ def get_video_length(video_url):
         print(f"Error getting video length: {e}")
         return 0
 
-def get_transcript(video_id):
-    """Get transcript from YouTube video."""
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        
-        def convert_to_json_serializable(item):
-            """Convert FetchedTranscriptSnippet or similar objects to dicts."""
-            if isinstance(item, dict):
-                return item
-            if hasattr(item, '_asdict'):  # namedtuple-like objects
-                return item._asdict()
-            if hasattr(item, '__dict__'):  # Regular objects with __dict__
-                return vars(item)
-            # Try to extract common transcript fields manually
-            try:
-                return {
-                    'text': getattr(item, 'text', str(item)),
-                    'start': getattr(item, 'start', 0),
-                    'duration': getattr(item, 'duration', 0)
-                }
-            except:
-                return str(item)
-        
-        # Instantiate the API object (required in newer versions)
-        api = YouTubeTranscriptApi()
+def _build_transcript_api():
+    """
+    Build a YouTubeTranscriptApi instance with proxy support.
 
+    Proxy is configured via environment variables:
+    - Webshare rotating residential proxy:
+        WEBSHARE_PROXY_USERNAME, WEBSHARE_PROXY_PASSWORD
+    - Generic HTTP/HTTPS proxy:
+        TRANSCRIPT_HTTP_PROXY, TRANSCRIPT_HTTPS_PROXY
+    """
+    import os
+    from youtube_transcript_api import YouTubeTranscriptApi
+
+    webshare_user = os.environ.get('WEBSHARE_PROXY_USERNAME')
+    webshare_pass = os.environ.get('WEBSHARE_PROXY_PASSWORD')
+    http_proxy = os.environ.get('TRANSCRIPT_HTTP_PROXY')
+    https_proxy = os.environ.get('TRANSCRIPT_HTTPS_PROXY')
+
+    if webshare_user and webshare_pass:
+        from youtube_transcript_api.proxies import WebshareProxyConfig
+        print("  [Proxy] Using Webshare rotating residential proxy")
+        return YouTubeTranscriptApi(
+            proxy_config=WebshareProxyConfig(
+                proxy_username=webshare_user,
+                proxy_password=webshare_pass
+            )
+        )
+    elif http_proxy or https_proxy:
+        from youtube_transcript_api.proxies import GenericProxyConfig
+        print(f"  [Proxy] Using generic proxy: {http_proxy or https_proxy}")
+        return YouTubeTranscriptApi(
+            proxy_config=GenericProxyConfig(
+                http_url=http_proxy or https_proxy,
+                https_url=https_proxy or http_proxy,
+            )
+        )
+    else:
+        return YouTubeTranscriptApi()
+
+
+def get_transcript(video_id, max_retries=3):
+    """Get transcript from YouTube video. Retries on 429 rate-limit errors."""
+    import time
+
+    def convert_to_json_serializable(item):
+        """Convert FetchedTranscriptSnippet or similar objects to dicts."""
+        if isinstance(item, dict):
+            return item
+        if hasattr(item, '_asdict'):
+            return item._asdict()
+        if hasattr(item, '__dict__'):
+            return vars(item)
         try:
-            # Try instance method with ko/en
+            return {
+                'text': getattr(item, 'text', str(item)),
+                'start': getattr(item, 'start', 0),
+                'duration': getattr(item, 'duration', 0)
+            }
+        except:
+            return str(item)
+
+    def _fetch(api, video_id):
+        try:
             transcript_list = api.list(video_id)
             transcript = transcript_list.find_transcript(['ko', 'en'])
             result = transcript.fetch()
             return [convert_to_json_serializable(item) for item in result]
         except Exception:
-            # Fallback: try fetching any available transcript via instance
-            try:
-                transcript_list = api.list(video_id)
-                transcript = transcript_list.find_generated_transcript(['ko', 'en'])
-                result = transcript.fetch()
-                return [convert_to_json_serializable(item) for item in result]
-            except Exception as e:
-                raise e
-                    
-    except Exception as e:
-        print(f"Error getting transcript: {e}")
-        return None
+            transcript_list = api.list(video_id)
+            transcript = transcript_list.find_generated_transcript(['ko', 'en'])
+            result = transcript.fetch()
+            return [convert_to_json_serializable(item) for item in result]
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            api = _build_transcript_api()
+            return _fetch(api, video_id)
+        except Exception as e:
+            err_str = str(e)
+            is_rate_limit = '429' in err_str or 'too many' in err_str.lower()
+            if is_rate_limit and attempt < max_retries:
+                wait = 30 * attempt  # 30s, 60s, 90s
+                print(f"  [429] Rate limited. Waiting {wait}s before retry {attempt}/{max_retries-1}...")
+                time.sleep(wait)
+            else:
+                print(f"Error getting transcript: {e}")
+                return None
 
 def get_comments(video_url, sort_by=0, max_regular=50, max_timestamp=50):
     """
