@@ -8,6 +8,7 @@ and collects transcript + comments data for each video.
 import json
 import os
 import sys
+import time
 import argparse
 from datetime import datetime
 
@@ -263,17 +264,48 @@ def main():
                         channel_videos += 1  # count toward channel target
                     continue
 
-                try:
-                    data = youtube_collector.collect_video_data(
-                        video_url=url,
-                        max_regular=args.max_comments,
-                        max_timestamp=args.max_comments,
-                        sort_by=0,  # sort by popularity
-                    )
-                    data['channel_name'] = channel_name
-                    data['channel_url'] = channel_url
-                    data['title'] = title
+                MAX_RETRIES = 3
+                data = None
+                last_error = None
 
+                for attempt in range(1, MAX_RETRIES + 1):
+                    try:
+                        data = youtube_collector.collect_video_data(
+                            video_url=url,
+                            max_regular=args.max_comments,
+                            max_timestamp=args.max_comments,
+                            sort_by=0,  # sort by popularity
+                        )
+                        data['channel_name'] = channel_name
+                        data['channel_url'] = channel_url
+                        data['title'] = title
+
+                        if not data.get('success', False):
+                            last_error = data.get('error', 'transcript or comments collection failed')
+                            print(f"    -> [{attempt}/{MAX_RETRIES}] 실패: {last_error}")
+                            if attempt < MAX_RETRIES:
+                                print(f"    -> 10초 후 재시도 ({attempt+1}/{MAX_RETRIES})...")
+                                time.sleep(10)
+                            data = None
+                            continue
+
+                        last_error = None
+                        break  # 성공
+
+                    except Exception as e:
+                        last_error = str(e)
+                        print(f"    -> [{attempt}/{MAX_RETRIES}] 오류: {last_error}")
+                        if attempt < MAX_RETRIES:
+                            print(f"    -> 10초 후 재시도 ({attempt+1}/{MAX_RETRIES})...")
+                            time.sleep(10)
+                        data = None
+
+                if data is None:
+                    print(f"    -> ERROR (3회 모두 실패): {last_error}")
+                    update_video_log(log_path, video_log, video_id, url, title,
+                                     channel_name, channel_url, 'error', last_error)
+                    # error는 done_ids에 추가하지 않음 → 다음 세션에서 재시도 가능
+                else:
                     tc = len(data.get('timestamp_comments', []))
                     rc = len(data.get('regular_comments', []))
 
@@ -285,25 +317,19 @@ def main():
                         update_video_log(log_path, video_log, video_id, url, title,
                                          channel_name, channel_url, 'skipped', detail)
                         done_ids.add(video_id)
-                        continue
+                    else:
+                        f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
+                        f_out.flush()
+                        channel_videos += 1
+                        total_videos_written += 1
+                        tr = len(data.get('transcript', []))
+                        detail = f"regular={rc}, timestamp={tc}, transcript={tr}"
+                        print(f"    -> COLLECTED: {detail} | channel videos={channel_videos}")
+                        update_video_log(log_path, video_log, video_id, url, title,
+                                         channel_name, channel_url, 'collected', detail)
+                        done_ids.add(video_id)
 
-                    f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
-                    f_out.flush()
-                    channel_videos += 1
-                    total_videos_written += 1
-                    tr = len(data.get('transcript', []))
-                    detail = f"regular={rc}, timestamp={tc}, transcript={tr}"
-                    print(f"    -> COLLECTED: {detail} | channel videos={channel_videos}")
-                    update_video_log(log_path, video_log, video_id, url, title,
-                                     channel_name, channel_url, 'collected', detail)
-                    done_ids.add(video_id)
-
-                except Exception as e:
-                    detail = str(e)
-                    print(f"    -> ERROR: {detail}")
-                    update_video_log(log_path, video_log, video_id, url, title,
-                                     channel_name, channel_url, 'error', detail)
-                    # error는 done_ids에 추가하지 않음 → 다음 세션에서 재시도 가능
+                time.sleep(10)  # YouTube IP 차단 방지용 요청 간격
 
             if channel_videos == 0:
                 print(f"\n  -> CHANNEL SKIPPED: no videos passed the minimum thresholds")

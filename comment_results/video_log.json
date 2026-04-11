@@ -430,59 +430,5 @@
     "status": "collected",
     "timestamp": "2026-04-11T23:28:16.072006",
     "detail": "regular=80, timestamp=5, transcript=296"
-  },
-  "VjwD6zGgfBI": {
-    "video_url": "https://www.youtube.com/watch?v=VjwD6zGgfBI",
-    "title": "[BWF] 안세영 vs 천 위 페이 5분 하이라이트｜전영 오픈",
-    "channel_name": "SPOTV",
-    "channel_url": "https://www.youtube.com/@SPOTV",
-    "status": "collected",
-    "timestamp": "2026-04-11T23:32:43.025784",
-    "detail": "regular=100, timestamp=17, transcript=0"
-  },
-  "lQMyNdPkjgw": {
-    "video_url": "https://www.youtube.com/watch?v=lQMyNdPkjgw",
-    "title": "LA 다저스 vs LA 에인절스｜5분 하이라이트｜2026 MLB 시범경기 (02.22)",
-    "channel_name": "SPOTV",
-    "channel_url": "https://www.youtube.com/@SPOTV",
-    "status": "collected",
-    "timestamp": "2026-04-11T23:33:34.469471",
-    "detail": "regular=100, timestamp=5, transcript=0"
-  },
-  "BUcXM3N95gk": {
-    "video_url": "https://www.youtube.com/watch?v=BUcXM3N95gk",
-    "title": "LA 다저스 vs 샌디에이고｜5분 하이라이트｜2026 MLB 시범경기 (02.23)",
-    "channel_name": "SPOTV",
-    "channel_url": "https://www.youtube.com/@SPOTV",
-    "status": "collected",
-    "timestamp": "2026-04-11T23:34:25.768782",
-    "detail": "regular=100, timestamp=7, transcript=0"
-  },
-  "g61dJYGFsn4": {
-    "video_url": "https://www.youtube.com/watch?v=g61dJYGFsn4",
-    "title": "뉴욕 양키스 vs 샌프란시스코｜5분 하이라이트｜2026 MLB (03.28)",
-    "channel_name": "SPOTV",
-    "channel_url": "https://www.youtube.com/@SPOTV",
-    "status": "collected",
-    "timestamp": "2026-04-11T23:35:09.480495",
-    "detail": "regular=100, timestamp=10, transcript=0"
-  },
-  "Tp1Fi3G2uI4": {
-    "video_url": "https://www.youtube.com/watch?v=Tp1Fi3G2uI4",
-    "title": "LA 다저스 vs 토론토｜5분 하이라이트｜2026 MLB (04.08)",
-    "channel_name": "SPOTV",
-    "channel_url": "https://www.youtube.com/@SPOTV",
-    "status": "collected",
-    "timestamp": "2026-04-11T23:35:35.950685",
-    "detail": "regular=100, timestamp=8, transcript=0"
-  },
-  "35henQDm9kU": {
-    "video_url": "https://www.youtube.com/watch?v=35henQDm9kU",
-    "title": "LA 다저스 vs 워싱턴｜5분 하이라이트｜2026 MLB (04.04)",
-    "channel_name": "SPOTV",
-    "channel_url": "https://www.youtube.com/@SPOTV",
-    "status": "skipped",
-    "timestamp": "2026-04-11T23:36:04.674810",
-    "detail": "regular=100, timestamp=3 (need >= 5 each)"
   }
 }
