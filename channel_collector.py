@@ -282,6 +282,13 @@ def main():
 
                         if not data.get('success', False):
                             last_error = data.get('error', 'transcript or comments collection failed')
+                            if last_error == 'subtitles_disabled':
+                                print(f"    -> SKIPPED: subtitles_disabled")
+                                update_video_log(log_path, video_log, video_id, url, title,
+                                                 channel_name, channel_url, 'skipped', 'subtitles_disabled')
+                                done_ids.add(video_id)
+                                data = None
+                                break
                             print(f"    -> [{attempt}/{MAX_RETRIES}] 실패: {last_error}")
                             if attempt < MAX_RETRIES:
                                 print(f"    -> 10초 후 재시도 ({attempt+1}/{MAX_RETRIES})...")
@@ -300,7 +307,9 @@ def main():
                             time.sleep(10)
                         data = None
 
-                if data is None:
+                if data is None and last_error == 'subtitles_disabled':
+                    pass  # already logged as skipped above
+                elif data is None:
                     print(f"    -> ERROR (3회 모두 실패): {last_error}")
                     update_video_log(log_path, video_log, video_id, url, title,
                                      channel_name, channel_url, 'error', last_error)
