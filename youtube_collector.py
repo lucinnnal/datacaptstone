@@ -67,6 +67,11 @@ def _build_transcript_api():
     """
     import os
     from youtube_transcript_api import YouTubeTranscriptApi
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
     webshare_user = os.environ.get('WEBSHARE_PROXY_USERNAME')
     webshare_pass = os.environ.get('WEBSHARE_PROXY_PASSWORD')

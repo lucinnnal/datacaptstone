@@ -48,17 +48,16 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
+# .env 파일을 열어 각 값을 입력하세요.
 ```
 
-| 변수 | 용도 |
-|------|------|
-| `GEMINI_API_KEY` | Gemini API 키 (필터링·요약 스크립트에 필요) |
-| `WEBSHARE_PROXY_USERNAME` | Webshare rotating residential 프록시 사용자명 |
-| `WEBSHARE_PROXY_PASSWORD` | Webshare rotating residential 프록시 비밀번호 |
-| `TRANSCRIPT_HTTP_PROXY` | 범용 HTTP 프록시 URL (자막 수집용) |
-| `TRANSCRIPT_HTTPS_PROXY` | 범용 HTTPS 프록시 URL (자막 수집용) |
+| 변수 | 필수 | 용도 |
+|------|------|------|
+| `GEMINI_API_KEY` | 필터링·요약 사용 시 필수 | Gemini API 키 |
+| `WEBSHARE_PROXY_USERNAME` | 선택 | Webshare rotating residential 프록시 사용자명 |
+| `WEBSHARE_PROXY_PASSWORD` | 선택 | Webshare rotating residential 프록시 비밀번호 |
 
-> `WEBSHARE_*` 또는 `TRANSCRIPT_*_PROXY` 변수가 설정되어 있으면 자막 수집 시 자동으로 프록시를 경유합니다.
+> `WEBSHARE_*` 변수가 `.env`에 설정되어 있으면 자막 수집 시 자동으로 프록시를 경유합니다.
 
 ## 사용법
 
