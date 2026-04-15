@@ -142,6 +142,13 @@ def get_transcript(video_id, max_retries=3):
             if 'Subtitles are disabled' in err_str:
                 print(f"  [SKIP] Subtitles are disabled for video {video_id}")
                 return 'subtitles_disabled'
+            is_geo_blocked = (
+                'not made this video available in your country' in err_str
+                or ('unplayable' in err_str.lower() and 'country' in err_str.lower())
+            )
+            if is_geo_blocked:
+                print(f"  [SKIP] Video not available in your country: {video_id}")
+                return 'geo_blocked'
             is_rate_limit = '429' in err_str or 'too many' in err_str.lower()
             if is_rate_limit and attempt < max_retries:
                 wait = 30 * attempt  # 30s, 60s, 90s
@@ -262,12 +269,12 @@ def collect_video_data(video_url, max_regular=50, max_timestamp=50, sort_by=0):
     duration = get_video_length(video_url)
     transcript = get_transcript(video_id)
 
-    if transcript == 'subtitles_disabled':
+    if transcript in ('subtitles_disabled', 'geo_blocked'):
         return {
             'video_url': video_url,
             'video_id': video_id,
             'success': False,
-            'error': 'subtitles_disabled',
+            'error': transcript,
             'video_length': duration,
             'transcript': [],
             'timestamp_comments': [],

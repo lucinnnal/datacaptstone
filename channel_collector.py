@@ -301,6 +301,18 @@ def main():
 
                     except Exception as e:
                         last_error = str(e)
+                        is_geo_blocked = (
+                            'not made this video available in your country' in last_error
+                            or ('unplayable' in last_error.lower() and 'country' in last_error.lower())
+                        )
+                        if is_geo_blocked:
+                            print(f"    -> SKIPPED: geo_blocked (country restriction)")
+                            update_video_log(log_path, video_log, video_id, url, title,
+                                             channel_name, channel_url, 'skipped', 'geo_blocked')
+                            done_ids.add(video_id)
+                            data = None
+                            last_error = 'geo_blocked'
+                            break
                         print(f"    -> [{attempt}/{MAX_RETRIES}] 오류: {last_error}")
                         if attempt < MAX_RETRIES:
                             print(f"    -> 10초 후 재시도 ({attempt+1}/{MAX_RETRIES})...")
