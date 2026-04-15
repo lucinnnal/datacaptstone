@@ -211,6 +211,10 @@ def get_comments(video_url, sort_by=0, max_regular=50, max_timestamp=50):
                 
         return timestamp_comments, regular_comments, scanned_count
     except Exception as e:
+        err_str = str(e)
+        if 'not made this video available in your country' in err_str or 'unplayable' in err_str.lower() and 'country' in err_str.lower():
+            print(f"  [SKIP] Video not available in your country")
+            return 'geo_blocked', None, 0
         print(f"Error getting comments: {e}")
         return None, None, 0
 
@@ -273,6 +277,18 @@ def collect_video_data(video_url, max_regular=50, max_timestamp=50, sort_by=0):
     timestamp_comments, regular_comments, _ = get_comments(
         video_url, sort_by=sort_by, max_regular=max_regular, max_timestamp=max_timestamp
     )
+
+    if timestamp_comments == 'geo_blocked':
+        return {
+            'video_url': video_url,
+            'video_id': video_id,
+            'success': False,
+            'error': 'geo_blocked',
+            'video_length': duration,
+            'transcript': transcript if transcript else [],
+            'timestamp_comments': [],
+            'regular_comments': []
+        }
 
     success = transcript is not None and timestamp_comments is not None and regular_comments is not None
 
